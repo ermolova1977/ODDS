@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FinaTrack Pro - Сводный ОДДС 2026</title>
+    <title>FinaTrack Pro - Импорт из Excel 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -41,6 +41,7 @@
 <body class="min-h-screen pb-10">
 
     <div id="app-container" class="max-w-7xl mx-auto px-4 pt-6">
+        <!-- шапка -->
         <header class="flex flex-wrap justify-between items-center mb-6 gap-4">
             <div class="flex items-center gap-4">
                 <span class="text-xl font-black tracking-tighter uppercase italic">
@@ -52,12 +53,17 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
+                <label class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-xl flex items-center gap-2 transition-all text-xs font-semibold cursor-pointer">
+                    <i data-lucide="upload-cloud" class="w-4 h-4"></i> Импорт данных (Excel)
+                    <input type="file" id="excel-import" class="hidden" accept=".xlsx, .xls, .csv" onchange="window.handleExcelImport(this)">
+                </label>
                 <button onclick="window.exportOddsExcel()" class="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-xl flex items-center gap-2 transition-all text-xs font-semibold">
-                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Экспорт ОДДС в Excel
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Экспорт ОДДС
                 </button>
             </div>
         </header>
 
+        <!-- навигация -->
         <nav class="flex bg-[#13161c] p-1 rounded-xl mb-6 border border-white/5 overflow-x-auto scrollbar-hide">
             <button onclick="window.switchTab('overview')" id="tab-overview" class="tab-active flex-1 min-w-[120px] py-2.5 rounded-lg flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider transition-all">
                 <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Сводный дашборд
@@ -77,6 +83,7 @@
         </nav>
 
         <main>
+            <!-- секция сводный дашборд -->
             <div id="section-overview" class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="glass-card p-5 rounded-2xl">
@@ -104,7 +111,7 @@
                     <div class="glass-card p-5 rounded-2xl border-l-2 border-blue-500">
                         <div class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Чистый денежный поток (NCF)</div>
                         <div class="flex justify-between items-baseline mb-1">
-                            <span class="text-[11px] text-slate-400">факт:</span>
+                            <span class="text-[11px] text-slate-400">fact:</span>
                             <span id="kpi-ncf-fact" class="text-xl font-black text-white">0 ₽</span>
                         </div>
                         <div class="flex justify-between items-baseline text-[11px] border-t border-white/5 pt-1 mt-1 text-slate-500">
@@ -124,8 +131,7 @@
                     <div class="glass-card p-5 rounded-2xl space-y-4 flex flex-col justify-between">
                         <div>
                             <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Состояние ликвидности</div>
-                            <div id="dash-gap-status" class="space-y-3">
-                                </div>
+                            <div id="dash-gap-status" class="space-y-3"></div>
                         </div>
                         <div class="border-t border-white/5 pt-4">
                             <div class="text-[10px] uppercase font-bold text-slate-500 mb-2">распределение по кошелькам (факт):</div>
@@ -142,6 +148,7 @@
                 </div>
             </div>
 
+            <!-- секция матрица оддс -->
             <div id="section-odds" class="hidden space-y-6">
                 <div class="flex flex-wrap gap-4 items-center bg-[#13161c] p-4 rounded-2xl border border-white/5">
                     <div class="flex flex-col gap-1">
@@ -203,4 +210,855 @@
                                     <th class="border-l border-white/5"></th>
                                     <script>
                                         for(let i=0; i<13; i++) {
-                                            const borderClass = i === 12 ? 'border-l-2 border-blue-90
+                                            const borderClass = i === 12 ? 'border-l-2 border-blue-900/50 bg-blue-950/10 font-bold' : 'border-l border-white/5';
+                                            document.write(`
+                                                <th class="${borderClass} text-right text-amber-500/80">Плн</th>
+                                                <th class="text-right text-emerald-400/80">Фкт</th>
+                                                <th class="text-right text-slate-400 border-r border-white/5">Откл</th>
+                                            `);
+                                        }
+                                    </script>
+                                </tr>
+                            </thead>
+                            <tbody id="odds-matrix-body" class="divide-y divide-white/5"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- секция журнал транзакций -->
+            <div id="section-transactions" class="hidden space-y-4">
+                <div class="flex flex-wrap gap-4 items-center justify-between no-print">
+                    <input type="text" id="search-tx" oninput="window.renderTxList()" placeholder="Поиск по описанию, проекту или комментарию..." class="flex-1 min-w-[280px] bg-[#13161c] border border-white/5 rounded-xl py-2.5 px-4 outline-none focus:border-blue-500 text-sm text-white">
+                    <div class="flex gap-2">
+                        <select id="filter-tx-type" onchange="window.renderTxList()" class="bg-[#13161c] text-xs font-semibold p-2.5 rounded-xl border border-white/5 text-white">
+                            <option value="all">Все типы</option>
+                            <option value="fact">Только Факт</option>
+                            <option value="plan">Только План</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="transactions-list" class="space-y-2"></div>
+            </div>
+
+            <!-- секция добавления / редактирования -->
+            <div id="section-add" class="hidden max-w-2xl mx-auto">
+                <div class="glass-card p-6 rounded-2xl border border-white/5">
+                    <h2 id="form-title" class="text-base font-bold mb-6 text-white uppercase tracking-wider text-center">новая запись движения дс</h2>
+                    <form id="tx-form" class="space-y-4" onsubmit="window.handleFormSubmit(event)">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">тип сценария</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label class="p-3 bg-slate-900 border border-white/5 rounded-xl flex items-center justify-center gap-2 cursor-pointer text-xs font-bold text-amber-500">
+                                        <input type="radio" name="tx-scenario" value="plan" checked> ПЛАН
+                                    </label>
+                                    <label class="p-3 bg-slate-900 border border-white/5 rounded-xl flex items-center justify-center gap-2 cursor-pointer text-xs font-bold text-emerald-400">
+                                        <input type="radio" name="tx-scenario" value="fact"> ФАКТ
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">источник финансирования</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label class="p-3 bg-slate-900 border border-white/5 rounded-xl flex items-center justify-center gap-2 cursor-pointer text-xs font-semibold text-white">
+                                        <input type="radio" name="tx-source" value="bank" checked> Р/С (Банк)
+                                    </label>
+                                    <label class="p-3 bg-slate-900 border border-white/5 rounded-xl flex items-center justify-center gap-2 cursor-pointer text-xs font-semibold text-white">
+                                        <input type="radio" name="tx-source" value="cash"> Касса
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">краткое описание операции</label>
+                                <input type="text" id="tx-desc" required placeholder="например: оплата за арматуру" class="w-full bg-slate-900 border border-white/5 rounded-xl py-2.5 px-4 outline-none focus:border-blue-500 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">проект / аналитика</label>
+                                <input type="text" id="tx-project" placeholder="например: ЖК Оникс" class="w-full bg-slate-900 border border-white/5 rounded-xl py-2.5 px-4 outline-none focus:border-blue-500 text-xs text-white">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">сумма, ₽</label>
+                                <input type="number" id="tx-amount" step="0.01" required placeholder="0.00" class="w-full bg-slate-900 border border-white/5 rounded-xl py-2.5 px-4 outline-none focus:border-blue-500 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">дата операции</label>
+                                <input type="date" id="tx-date" min="2026-01-01" max="2026-12-31" required class="w-full bg-slate-900 border border-white/5 rounded-xl py-2.5 px-4 outline-none focus:border-blue-500 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">статья спецификации</label>
+                                <select id="tx-cat" class="w-full bg-slate-900 border border-white/5 rounded-xl py-2.5 px-4 outline-none text-xs text-white focus:border-blue-500"></select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">комментарий (контрагент, назначение)</label>
+                            <textarea id="tx-comment" rows="2" placeholder="Дополнительные детали финансовой операции..." class="w-full bg-slate-900 border border-white/5 rounded-xl py-2 px-4 outline-none text-xs resize-none text-white focus:border-blue-500"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">ссылка на первичный документ (облако)</label>
+                            <input type="url" id="tx-link" placeholder="https://drive.google.com/..." class="w-full bg-slate-900 border border-white/5 rounded-xl py-2.5 px-4 outline-none text-xs text-white focus:border-blue-500">
+                        </div>
+
+                        <div class="flex gap-2 pt-2">
+                            <button type="button" id="cancel-edit" onclick="window.resetForm()" class="hidden flex-1 bg-slate-800 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition-all">отмена</button>
+                            <button type="submit" id="submit-btn" class="flex-[2] bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition-all shadow-lg shadow-blue-600/10">сохранить запись</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- секция структура статей -->
+            <div id="section-categories" class="hidden max-w-xl mx-auto space-y-6">
+                <div class="glass-card p-6 rounded-2xl border border-white/5">
+                    <h3 class="text-sm font-bold mb-4 uppercase tracking-wider text-white">справочник управленческих статей</h3>
+                    <div class="grid grid-cols-1 gap-2 mb-4 bg-slate-900/50 p-3 rounded-xl border border-white/5">
+                        <div class="text-[10px] uppercase font-bold text-slate-500">добавление новой статьи</div>
+                        <div class="flex flex-wrap gap-2">
+                            <input type="text" id="new-cat-name" placeholder="Название статьи..." class="flex-1 min-w-[150px] bg-slate-900 border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-blue-500">
+                            <select id="new-cat-type" class="bg-slate-900 border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                                <option value="income">Поступление ДС</option>
+                                <option value="expense">Выбытие ДС</option>
+                            </select>
+                            <select id="new-cat-activity" class="bg-slate-900 border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                                <option value="operating">Операционная деят.</option>
+                                <option value="investing">Инвестиционная деят.</option>
+                                <option value="financing">Финансовая деят.</option>
+                            </select>
+                            <button onclick="window.addCategory()" class="bg-blue-600 hover:bg-blue-500 p-2 rounded-xl transition-all"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                    <div id="categories-grid" class="space-y-1 max-h-[400px] overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 right-6 bg-white text-slate-950 px-5 py-2.5 rounded-xl font-bold shadow-2xl transition-all opacity-0 translate-y-6 pointer-events-none z-50 text-xs uppercase tracking-wider"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const manualConfig = {
+            apiKey: "AIzaSyDAehDfEYSjmHkiXEZs9oRJhNQ8bZkDbfo",
+            authDomain: "finatrack-6bdbd.firebaseapp.com",
+            projectId: "finatrack-6bdbd",
+            storageBucket: "finatrack-6bdbd.firebasestorage.app",
+            messagingSenderId: "610040806592",
+            appId: "1:610040806592:web:d5df1c50582e3181b04125"
+        };
+
+        const state = {
+            transactions: [],
+            categories: [
+                { id: 'cat_in_1', name: 'Поступления от покупателей (выручка)', type: 'income', activity: 'operating' },
+                { id: 'cat_in_2', name: 'Целевое финансирование / Кредиты', type: 'income', activity: 'financing' },
+                { id: 'cat_out_1', name: 'Строительно-монтажные работы (СМР)', type: 'expense', activity: 'operating' },
+                { id: 'cat_out_2', name: 'Проектирование и ИРД', type: 'expense', activity: 'operating' },
+                { id: 'cat_out_3', name: 'Маркетинг и реклама объектов', type: 'expense', activity: 'operating' },
+                { id: 'cat_out_4', name: 'ФОТ Административный', type: 'expense', activity: 'operating' },
+                { id: 'cat_out_5', name: 'Покупка оборудования и ОС', type: 'expense', activity: 'investing' },
+                { id: 'cat_out_6', name: 'Обслуживание кредитов и процентов', type: 'expense', activity: 'financing' }
+            ],
+            user: null,
+            editingId: null,
+            isOffline: false,
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'FinaTrack_v2',
+            db: null,
+            auth: null,
+            chartInstance: null
+        };
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // --- Глобальная навигация ---
+        window.switchTab = (id) => {
+            ['overview', 'odds', 'transactions', 'add', 'categories'].forEach(t => {
+                const sec = document.getElementById(`section-${t}`);
+                const tab = document.getElementById(`tab-${t}`);
+                if (sec) sec.classList.add('hidden');
+                if (tab) {
+                    tab.classList.remove('tab-active');
+                    tab.classList.add('text-slate-400');
+                }
+            });
+            const activeSec = document.getElementById(`section-${id}`);
+            const activeTab = document.getElementById(`tab-${id}`);
+            if (activeSec) activeSec.classList.remove('hidden');
+            if (activeTab) {
+                activeTab.classList.remove('text-slate-400');
+                activeTab.classList.add('tab-active');
+            }
+            if (id === 'overview') window.renderDashboard();
+            if (id === 'odds') window.renderOddsMatrix();
+            if (id === 'transactions') window.renderTxList();
+            lucide.createIcons();
+        };
+
+        window.resetForm = () => {
+            state.editingId = null;
+            const form = document.getElementById('tx-form');
+            if (form) form.reset();
+            document.getElementById('form-title').textContent = 'новая запись движения дс';
+            document.getElementById('submit-btn').textContent = 'сохранить запись';
+            document.getElementById('cancel-edit').classList.add('hidden');
+            document.getElementById('tx-date').value = '2026-01-01';
+        };
+
+        // --- Модуль импорта Excel (SheetJS) ---
+        window.handleExcelImport = (input) => {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+                try {
+                    const dataArray = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(dataArray, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    // преобразуем в плоский массив
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }).slice(1);
+                    if (rows.length === 0) {
+                        showToast('Выбранный файл Excel пуст');
+                        return;
+                    }
+
+                    let categoriesUpdated = false;
+                    let batch = !state.isOffline && state.db && state.user ? writeBatch(state.db) : null;
+                    const txCol = !state.isOffline && state.db && state.user ? collection(state.db, 'artifacts', state.appId, 'public', 'data', 'transactions') : null;
+                    
+                    let operationCount = 0;
+
+                    for (const row of rows) {
+                        if (!row || row.length < 6) continue;
+
+                        // маппинг колонок: 0-Дата, 1-Сценарий, 2-Источник, 3-Статья, 4-Описание, 5-Проект, 6-Сумма, 7-Комментарий, 8-Ссылка
+                        const [dateRaw, scenarioRaw, sourceRaw, catNameRaw, descRaw, projectRaw, amountRaw, commentRaw, linkRaw] = row.map(cell => String(cell ?? '').trim());
+                        
+                        if (!dateRaw || !descRaw || !amountRaw) continue;
+
+                        const isPlan = scenarioRaw.toLowerCase() === 'план';
+                        const source = sourceRaw.toLowerCase() === 'касса' ? 'cash' : 'bank';
+                        const amount = Math.abs(parseFloat(amountRaw.replace(',', '.'))) || 0;
+
+                        // проверка и создание авто-статьи
+                        let cat = state.categories.find(c => c.name.toLowerCase() === catNameRaw.toLowerCase());
+                        if (!cat && catNameRaw) {
+                            cat = {
+                                id: 'cat_' + Date.now() + Math.random().toString(36).substring(5),
+                                name: catNameRaw,
+                                type: 'expense', // по умолчанию ставим расход, если новая
+                                activity: 'operating'
+                            };
+                            state.categories.push(cat);
+                            categoriesUpdated = true;
+                        }
+
+                        const txId = 'tx_' + Date.now() + Math.random().toString(36).substring(5);
+                        const txPayload = {
+                            id: txId,
+                            desc: descRaw,
+                            project: projectRaw || '',
+                            amount: amount,
+                            date: dateRaw,
+                            comment: commentRaw || '',
+                            fileUrl: linkRaw || '',
+                            catId: cat ? cat.id : 'uncategorized',
+                            isPlan: isPlan,
+                            source: source,
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        };
+
+                        if (state.isOffline) {
+                            state.transactions.push(txPayload);
+                        } else if (batch && txCol) {
+                            const newTxRef = doc(txCol, txId);
+                            batch.set(newTxRef, txPayload);
+                            operationCount++;
+
+                            // защита от лимита в 500 записей на батч
+                            if (operationCount >= 450) {
+                                showToast(`Сохранение блока данных (${operationCount})...`);
+                                await batch.commit();
+                                batch = writeBatch(state.db);
+                                operationCount = 0;
+                            }
+                        }
+                    }
+
+                    if (state.isOffline) {
+                        localStorage.setItem('ft_v2_tx', JSON.stringify(state.transactions));
+                        if (categoriesUpdated) localStorage.setItem('ft_v2_cats', JSON.stringify(state.categories));
+                        showToast('Локальный импорт завершен');
+                    } else {
+                        if (categoriesUpdated) {
+                            await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'categories', 'config'), { categories: state.categories });
+                        }
+                        if (batch && operationCount > 0) {
+                            await batch.commit();
+                        }
+                        showToast('Облачный импорт завершен успешно');
+                    }
+
+                    refreshUI();
+                    window.switchTab('overview');
+
+                } catch (error) {
+                    console.error("Критическая ошибка импорта:", error);
+                    showToast('Ошибка импорта! Проверьте формат файла');
+                }
+                input.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        // --- Управление статьями ---
+        window.addCategory = async () => {
+            const name = document.getElementById('new-cat-name').value.trim();
+            const type = document.getElementById('new-cat-type').value;
+            const activity = document.getElementById('new-cat-activity').value;
+            if (!name) return;
+
+            const newCat = { id: 'cat_' + Date.now() + Math.random().toString(36).substring(5), name, type, activity };
+            state.categories.push(newCat);
+
+            await saveCategoriesConfig();
+            document.getElementById('new-cat-name').value = '';
+            showToast('Статья добавлена');
+            refreshUI();
+        };
+
+        window.deleteCategory = async (id) => {
+            if (!confirm('Удалить эту статью? Все связанные операции попадут в раздел "Нераспределенное".')) return;
+            state.categories = state.categories.filter(c => c.id !== id);
+            await saveCategoriesConfig();
+            showToast('Статья удалена');
+            refreshUI();
+        };
+
+        async function saveCategoriesConfig() {
+            if (!state.isOffline && state.db && state.user) {
+                try {
+                    await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'categories', 'config'), { categories: state.categories });
+                } catch (e) { console.error(e); }
+            } else {
+                localStorage.setItem('ft_v2_cats', JSON.stringify(state.categories));
+            }
+        }
+
+        // --- Управление транзакциями ---
+        window.editTx = (id) => {
+            const tx = state.transactions.find(t => t.id === id);
+            if (!tx) return;
+            
+            state.editingId = id;
+            document.getElementById('tx-desc').value = tx.desc;
+            document.getElementById('tx-project').value = tx.project || '';
+            document.getElementById('tx-amount').value = tx.amount;
+            document.getElementById('tx-date').value = tx.date;
+            document.getElementById('tx-comment').value = tx.comment || '';
+            document.getElementById('tx-link').value = tx.fileUrl || '';
+            document.getElementById('tx-cat').value = tx.catId;
+
+            const scenarioRadios = document.getElementsByName('tx-scenario');
+            scenarioRadios.forEach(r => r.checked = r.value === (tx.isPlan ? 'plan' : 'fact'));
+
+            const sourceRadios = document.getElementsByName('tx-source');
+            sourceRadios.forEach(r => r.checked = r.value === tx.source);
+
+            document.getElementById('form-title').textContent = 'Правка финансовой записи';
+            document.getElementById('submit-btn').textContent = 'Обновить запись';
+            document.getElementById('cancel-edit').classList.remove('hidden');
+            
+            window.switchTab('add');
+        };
+
+        window.deleteTx = async (id) => {
+            if (!confirm('Удалить операцию?')) return;
+            if (!state.isOffline && state.db && state.user) {
+                try {
+                    await deleteDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'transactions', id));
+                    showToast('Запись удалена');
+                } catch (e) { console.error(e); }
+            } else {
+                state.transactions = state.transactions.filter(t => t.id !== id);
+                localStorage.setItem('ft_v2_tx', JSON.stringify(state.transactions));
+                showToast('Запись удалена');
+                refreshUI();
+            }
+        };
+
+        window.handleFormSubmit = async (e) => {
+            e.preventDefault();
+            
+            const catId = document.getElementById('tx-cat').value;
+            const isPlan = document.querySelector('input[name="tx-scenario"]:checked').value === 'plan';
+            const source = document.querySelector('input[name="tx-source"]:checked').value;
+            const currentEditingId = state.editingId;
+
+            const data = {
+                desc: document.getElementById('tx-desc').value.trim(),
+                project: document.getElementById('tx-project').value.trim(),
+                amount: Math.abs(parseFloat(document.getElementById('tx-amount').value)) || 0,
+                date: document.getElementById('tx-date').value,
+                comment: document.getElementById('tx-comment').value.trim(),
+                fileUrl: document.getElementById('tx-link').value.trim(),
+                catId: catId,
+                isPlan: isPlan,
+                source: source,
+                updatedAt: Date.now()
+            };
+
+            try {
+                if (currentEditingId) {
+                    if (!state.isOffline && state.db && state.user) {
+                        await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'transactions', currentEditingId), data, { merge: true });
+                    } else {
+                        const idx = state.transactions.findIndex(t => t.id === currentEditingId);
+                        if (idx !== -1) state.transactions[idx] = { ...state.transactions[idx], ...data };
+                    }
+                } else {
+                    const newId = 'tx_' + Date.now() + Math.random().toString(36).substring(5);
+                    const payload = { id: newId, ...data, createdAt: Date.now() };
+                    
+                    if (!state.isOffline && state.db && state.user) {
+                        await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'transactions', newId), payload);
+                    } else {
+                        state.transactions.push(payload);
+                    }
+                }
+
+                if (state.isOffline) localStorage.setItem('ft_v2_tx', JSON.stringify(state.transactions));
+
+                window.resetForm();
+                window.switchTab('overview');
+                showToast('Данные сохранены');
+                if (state.isOffline) refreshUI();
+
+            } catch (err) {
+                console.error(err);
+                showToast('Ошибка записи данных');
+            }
+        };
+
+        // --- Рендеринг сводного дашборда ---
+        window.renderDashboard = () => {
+            const tx2026 = state.transactions.filter(t => t.date && t.date.startsWith('2026'));
+
+            let inPlan = 0, inFact = 0, outPlan = 0, outFact = 0;
+            let bankFact = 0, cashFact = 0;
+
+            const monthlyData = Array.from({ length: 12 }, () => ({ inPlan: 0, inFact: 0, outPlan: 0, outFact: 0 }));
+
+            tx2026.forEach(t => {
+                const cat = state.categories.find(c => c.id === t.catId) || { type: 'expense' };
+                const m = parseInt(t.date.split('-')[1], 10) - 1;
+
+                if (cat.type === 'income') {
+                    if (t.isPlan) { inPlan += t.amount; if(m>=0 && m<12) monthlyData[m].inPlan += t.amount; }
+                    else { inFact += t.amount; if(m>=0 && m<12) monthlyData[m].inFact += t.amount; }
+                } else {
+                    if (t.isPlan) { outPlan += t.amount; if(m>=0 && m<12) monthlyData[m].outPlan += t.amount; }
+                    else { outFact += t.amount; if(m>=0 && m<12) monthlyData[m].outFact += t.amount; }
+                }
+
+                if (!t.isPlan) {
+                    if (t.source === 'bank') bankFact += (cat.type === 'income' ? t.amount : -t.amount);
+                    if (t.source === 'cash') cashFact += (cat.type === 'income' ? t.amount : -t.amount);
+                }
+            });
+
+            const ncfPlan = inPlan - outPlan;
+            const ncfFact = inFact - outFact;
+
+            document.getElementById('kpi-in-fact').innerText = `${inFact.toLocaleString()} ₽`;
+            document.getElementById('kpi-in-plan').innerText = `${inPlan.toLocaleString()} ₽`;
+            const inDiff = inFact - inPlan;
+            document.getElementById('kpi-in-diff').innerText = `${inDiff >= 0 ? '+' : ''}${inDiff.toLocaleString()} ₽`;
+            document.getElementById('kpi-in-diff').className = inDiff >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold';
+
+            document.getElementById('kpi-out-fact').innerText = `${outFact.toLocaleString()} ₽`;
+            document.getElementById('kpi-out-plan').innerText = `${outPlan.toLocaleString()} ₽`;
+            const outDiff = outFact - outPlan;
+            document.getElementById('kpi-out-diff').innerText = `${outDiff >= 0 ? '+' : ''}${outDiff.toLocaleString()} ₽`;
+            document.getElementById('kpi-out-diff').className = outDiff <= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold';
+
+            document.getElementById('kpi-ncf-fact').innerText = `${ncfFact.toLocaleString()} ₽`;
+            document.getElementById('kpi-ncf-plan').innerText = `${ncfPlan.toLocaleString()} ₽`;
+            const ncfDiff = ncfFact - ncfPlan;
+            document.getElementById('kpi-ncf-diff').innerText = `${ncfDiff >= 0 ? '+' : ''}${ncfDiff.toLocaleString()} ₽`;
+            document.getElementById('kpi-ncf-diff').className = ncfDiff >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold';
+
+            document.getElementById('wallet-bank-val').innerText = `${bankFact.toLocaleString()} ₽`;
+            document.getElementById('wallet-cash-val').innerText = `${cashFact.toLocaleString()} ₽`;
+
+            const ctx = document.getElementById('dashboardChart');
+            if (ctx) {
+                if (state.chartInstance) state.chartInstance.destroy();
+                const labels = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+                state.chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Приток (Факт)', data: monthlyData.map(d => d.inFact), backgroundColor: '#10b981', borderRadius: 4 },
+                            { label: 'Приток (План)', data: monthlyData.map(d => d.inPlan), backgroundColor: 'rgba(16, 185, 129, 0.15)', borderRadius: 4 },
+                            { label: 'Отток (Факт)', data: monthlyData.map(d => d.outFact), backgroundColor: '#f43f5e', borderRadius: 4 },
+                            { label: 'Отток (План)', data: monthlyData.map(d => d.outPlan), backgroundColor: 'rgba(244, 63, 94, 0.15)', borderRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10 } } } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
+                            y: { grid: { color: 'rgba(255,255,255,0.02)' }, ticks: { color: '#64748b', font: { size: 10 } } }
+                        }
+                    }
+                });
+            }
+
+            let runningPlan = 0;
+            const gapMonths = [];
+            for (let m = 0; m < 12; m++) {
+                runningPlan += (monthlyData[m].inPlan - monthlyData[m].outPlan);
+                if (runningPlan < 0) {
+                    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+                    gapMonths.push(monthNames[m]);
+                }
+            }
+
+            const statusContainer = document.getElementById('dash-gap-status');
+            if (statusContainer) {
+                if (gapMonths.length > 0) {
+                    statusContainer.innerHTML = `
+                        <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs">
+                            <span class="font-bold text-rose-400 block mb-1">Высокий риск дефицита</span>
+                            Обнаружены плановые кассовые разрывы в месяцах: <span class="font-semibold text-white">${gapMonths.join(', ')}</span>.
+                        </div>`;
+                } else {
+                    statusContainer.innerHTML = `
+                        <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                            <span class="font-bold text-emerald-400 block mb-1">Риски отсутствуют</span>
+                            Стабильный плановый остаток на протяжении всего финансового периода.
+                        </div>`;
+                }
+            }
+        };
+
+        // --- Генерация матрицы ОДДС ---
+        window.renderOddsMatrix = () => {
+            const body = document.getElementById('odds-matrix-body');
+            if (!body) return;
+
+            const filterSource = document.getElementById('filter-source').value;
+            const filterActivity = document.getElementById('filter-activity').value;
+
+            const tx2026 = state.transactions.filter(t => {
+                if (!t.date || !t.date.startsWith('2026')) return false;
+                if (filterSource !== 'all' && t.source !== filterSource) return false;
+                return true;
+            });
+
+            const getMonthlySums = (filteredTxs) => {
+                const map = Array.from({ length: 12 }, () => ({ plan: 0, fact: 0 }));
+                filteredTxs.forEach(t => {
+                    const month = parseInt(t.date.split('-')[1], 10) - 1;
+                    if (month >= 0 && month <= 11) {
+                        if (t.isPlan) map[month].plan += t.amount;
+                        else map[month].fact += t.amount;
+                    }
+                });
+                return map;
+            };
+
+            const balanceStart = Array.from({ length: 12 }, () => ({ plan: 0, fact: 0 }));
+            const balanceEnd = Array.from({ length: 12 }, () => ({ plan: 0, fact: 0 }));
+
+            let runningPlan = 0;
+            let runningFact = 0;
+            const gapsDetected = [];
+
+            for (let m = 0; m < 12; m++) {
+                balanceStart[m].plan = runningPlan;
+                balanceStart[m].fact = runningFact;
+
+                const monthTxs = tx2026.filter(t => parseInt(t.date.split('-')[1], 10) - 1 === m);
+                
+                const incPlan = monthTxs.filter(t => t.isPlan && (state.categories.find(c => c.id === t.catId)?.type === 'income' || t.catId === 'uncategorized')).reduce((s, t) => s + t.amount, 0);
+                const incFact = monthTxs.filter(t => !t.isPlan && (state.categories.find(c => c.id === t.catId)?.type === 'income' || t.catId === 'uncategorized')).reduce((s, t) => s + t.amount, 0);
+                
+                const expPlan = monthTxs.filter(t => t.isPlan && state.categories.find(c => c.id === t.catId)?.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                const expFact = monthTxs.filter(t => !t.isPlan && state.categories.find(c => c.id === t.catId)?.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+                runningPlan += (incPlan - expPlan);
+                runningFact += (incFact - expFact);
+
+                balanceEnd[m].plan = runningPlan;
+                balanceEnd[m].fact = runningFact;
+
+                if (runningPlan < 0) {
+                    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+                    gapsDetected.push({ month: monthNames[m], depth: Math.abs(runningPlan) });
+                }
+            }
+
+            const gapPanel = document.getElementById('cash-gap-panel');
+            const gapDetails = document.getElementById('cash-gap-details');
+            if (gapPanel && gapDetails) {
+                if (gapsDetected.length > 0) {
+                    gapPanel.classList.remove('hidden');
+                    const maxGap = Math.max(...gapsDetected.map(g => g.depth));
+                    gapDetails.innerHTML = `Критический дефицит ликвидности в месяцах: <strong>${gapsDetected.map(g => g.month).join(', ')}</strong>. Максимальный разрыв: <strong>${maxGap.toLocaleString()} ₽</strong>.`;
+                } else {
+                    gapPanel.classList.add('hidden');
+                }
+            }
+
+            const renderRow = (title, typeLabel, monthlyData, isHeaderRow = false, isBalanceRow = false) => {
+                let html = `<tr class="${isHeaderRow ? 'bg-slate-900 font-bold text-slate-300' : 'hover:bg-slate-900/50'}">
+                    <td class="sticky left-0 bg-slate-950 font-medium max-w-[240px] truncate">${title}</td>
+                    <td class="text-[10px] text-slate-500 uppercase text-center">${typeLabel}</td>`;
+                
+                let totalPlan = 0;
+                let totalFact = 0;
+
+                monthlyData.forEach(m => {
+                    const diff = m.fact - m.plan;
+                    totalPlan += m.plan;
+                    totalFact += m.fact;
+                    
+                    const planCellClass = (isBalanceRow && m.plan < 0) ? 'text-rose-400 font-black bg-rose-500/10' : 'text-amber-500/90';
+                    
+                    html += `
+                        <td class="text-right px-2 py-1.5 text-xs ${planCellClass}">${m.plan ? m.plan.toLocaleString(undefined, {minimumFractionDigits:0}) : '0'}</td>
+                        <td class="text-right px-2 py-1.5 text-xs font-semibold text-emerald-400">${m.fact ? m.fact.toLocaleString(undefined, {minimumFractionDigits:0}) : '0'}</td>
+                        <td class="text-right px-2 py-1.5 text-xs ${diff < 0 ? 'text-rose-500' : diff > 0 ? 'text-teal-400' : 'text-slate-600'}">${diff ? (diff > 0 ? '+' : '') + diff.toLocaleString(undefined, {minimumFractionDigits:0}) : '0'}</td>
+                    `;
+                });
+
+                const finalDiff = totalFact - totalPlan;
+                html += `
+                    <td class="text-right bg-blue-950/20 font-bold text-amber-500">${totalPlan.toLocaleString(undefined, {minimumFractionDigits:0})}</td>
+                    <td class="text-right bg-blue-950/20 font-black text-emerald-400">${totalFact.toLocaleString(undefined, {minimumFractionDigits:0})}</td>
+                    <td class="text-right bg-blue-950/20 font-bold ${finalDiff < 0 ? 'text-rose-400' : 'text-teal-400'}">${finalDiff ? (finalDiff > 0 ? '+' : '') + finalDiff.toLocaleString(undefined, {minimumFractionDigits:0}) : '0'}</td>
+                </tr>`;
+                return html;
+            };
+
+            let matrixHtml = '';
+            matrixHtml += renderRow('ОСТАТОК ДС НА НАЧАЛО ПЕРИОДА', 'баланс', balanceStart, true, true);
+
+            matrixHtml += `<tr class="bg-slate-900/50"><td colspan="40" class="text-[10px] font-black tracking-wider text-emerald-400 uppercase bg-emerald-950/10 px-2 py-1">I. Поступления денежных средств</td></tr>`;
+            const incomeCategories = state.categories.filter(c => c.type === 'income' && (filterActivity === 'all' || c.activity === filterActivity));
+            incomeCategories.forEach(cat => {
+                const catTx = tx2026.filter(t => t.catId === cat.id);
+                matrixHtml += renderRow(cat.name, cat.activity.substring(0,3), getMonthlySums(catTx));
+            });
+
+            matrixHtml += `<tr class="bg-slate-900/50"><td colspan="40" class="text-[10px] font-black tracking-wider text-rose-400 uppercase bg-rose-950/10 px-2 py-1">II. Выбытия денежных средств</td></tr>`;
+            const expenseCategories = state.categories.filter(c => c.type === 'expense' && (filterActivity === 'all' || c.activity === filterActivity));
+            expenseCategories.forEach(cat => {
+                const catTx = tx2026.filter(t => t.catId === cat.id);
+                matrixHtml += renderRow(cat.name, cat.activity.substring(0,3), getMonthlySums(catTx));
+            });
+
+            matrixHtml += renderRow('ОСТАТОК ДС НА КОНЕЦ ПЕРИОДА', 'баланс', balanceEnd, true, true);
+            body.innerHTML = matrixHtml;
+            lucide.createIcons();
+        };
+
+        window.exportOddsExcel = () => {
+            const table = document.querySelector(".odds-table");
+            if (!table) return;
+            const wb = XLSX.utils.table_to_book(table, { sheet: "ОДДС План-Факт 2026" });
+            XLSX.writeFile(wb, `odds_report_2026.xlsx`);
+            showToast('Экспорт ОДДС выполнен');
+        };
+
+        // --- Журнал транзакций ---
+        window.renderTxList = () => {
+            const list = document.getElementById('transactions-list');
+            if (!list) return;
+
+            const search = document.getElementById('search-tx').value.toLowerCase();
+            const filterType = document.getElementById('filter-tx-type').value;
+
+            let txs = [...state.transactions];
+            if (filterType === 'plan') txs = txs.filter(t => t.isPlan);
+            if (filterType === 'fact') txs = txs.filter(t => !t.isPlan);
+
+            if (search) {
+                txs = txs.filter(t => 
+                    (t.desc && t.desc.toLowerCase().includes(search)) || 
+                    (t.comment && t.comment.toLowerCase().includes(search)) ||
+                    (t.project && t.project.toLowerCase().includes(search))
+                );
+            }
+
+            txs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+            if (txs.length === 0) {
+                list.innerHTML = '<div class="text-center py-10 text-slate-500 italic text-xs">Нет подходящих финансовых записей</div>';
+                return;
+            }
+
+            list.innerHTML = txs.map(t => {
+                const cat = state.categories.find(c => c.id === t.catId) || { name: 'Нераспределенное', type: 'expense' };
+                return `
+                <div class="glass-card p-3 rounded-xl group transition-all hover:bg-[#1a1f29]">
+                    <div class="flex justify-between items-center gap-4">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="px-2 py-1 rounded text-[9px] font-black tracking-wider uppercase ${t.isPlan ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}">
+                                ${t.isPlan ? 'план' : 'факт'}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-white truncate">${escapeHtml(t.desc)}</div>
+                                <div class="text-[10px] text-slate-500 font-semibold uppercase tracking-tight">
+                                    ${escapeHtml(cat.name)} • ${t.date} • ${t.source === 'bank' ? 'Р/С (Банк)' : 'Касса'} ${t.project ? `• Проект: ${escapeHtml(t.project)}` : ''}
+                                </div>
+                                ${t.comment ? `<div class="text-[11px] text-slate-400 italic mt-0.5">${escapeHtml(t.comment)}</div>` : ''}
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <div class="text-xs font-black ${cat.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}">
+                                ${cat.type === 'income' ? '+' : '-'}${Number(t.amount).toLocaleString()} ₽
+                            </div>
+                            <div class="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-all mt-1">
+                                <button onclick="window.editTx('${t.id}')" class="text-slate-400 hover:text-blue-400 transition-colors"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
+                                <button onclick="window.deleteTx('${t.id}')" class="text-slate-400 hover:text-rose-500 transition-colors"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        };
+
+        function refreshUI() {
+            window.renderDashboard();
+            window.renderOddsMatrix();
+            window.renderTxList();
+            
+            const select = document.getElementById('tx-cat');
+            if (select) {
+                select.innerHTML = state.categories.map(c => `<option value="${c.id}">${c.name} (${c.type === 'income' ? 'Приток' : 'Отток'})</option>`).join('');
+            }
+
+            const grid = document.getElementById('categories-grid');
+            if (grid) {
+                grid.innerHTML = state.categories.map(c => `
+                    <div class="flex justify-between items-center p-2.5 bg-slate-900/80 rounded-xl border border-white/5 text-xs">
+                        <span class="font-medium text-white">${escapeHtml(c.name)} <span class="text-[9px] text-slate-500 uppercase font-bold">(${c.activity.substring(0,3)})</span></span>
+                        <button onclick="window.deleteCategory('${c.id}')" class="text-slate-500 hover:text-rose-500 transition-colors"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                `).join('');
+            }
+            lucide.createIcons();
+        }
+
+        function updateSyncIndicator(mode) {
+            const d = document.getElementById('sync-dot'); const t = document.getElementById('sync-text');
+            if (!d || !t) return;
+            if (mode === 'online') { 
+                d.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400'; 
+                t.innerText = 'облако синхронизировано'; 
+                t.className = 'text-emerald-400 text-[9px] font-bold uppercase'; 
+            } else { 
+                d.className = 'w-1.5 h-1.5 rounded-full bg-amber-500'; 
+                t.innerText = 'локальный режим'; 
+                t.className = 'text-amber-500 text-[9px] font-bold uppercase'; 
+            }
+        }
+
+        function showToast(m) { 
+            const t = document.getElementById('toast'); 
+            if (!t) return; 
+            t.innerText = m; 
+            t.classList.replace('opacity-0', 'opacity-100'); 
+            t.classList.replace('translate-y-6', 'translate-y-0'); 
+            setTimeout(() => { 
+                if (t) { 
+                    t.classList.replace('opacity-100', 'opacity-0'); 
+                    t.classList.replace('translate-y-0', 'translate-y-6'); 
+                } 
+            }, 3000); 
+        }
+
+        const startApp = async () => {
+            try {
+                const config = (typeof __firebase_config !== 'undefined' && __firebase_config) ? JSON.parse(__firebase_config) : manualConfig;
+                if (!config || !config.apiKey) throw new Error("No config available");
+
+                const firebaseApp = initializeApp(config);
+                state.auth = getAuth(firebaseApp);
+                state.db = getFirestore(firebaseApp);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(state.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(state.auth);
+                }
+
+                onAuthStateChanged(state.auth, (user) => {
+                    if (user) {
+                        state.user = user;
+                        
+                        onSnapshot(collection(state.db, 'artifacts', state.appId, 'public', 'data', 'transactions'), (snap) => {
+                            state.transactions = snap.docs.map(d => d.data());
+                            refreshUI();
+                            updateSyncIndicator('online');
+                        }, (err) => {
+                            console.warn("Firestore connection lost:", err.message);
+                            fallToOffline();
+                        });
+
+                        onSnapshot(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'categories', 'config'), (snap) => {
+                            if (snap.exists()) {
+                                state.categories = snap.data().categories || state.categories;
+                                refreshUI();
+                            }
+                        });
+                    }
+                });
+
+            } catch (err) {
+                console.warn("Offline mode active:", err.message);
+                fallToOffline();
+            }
+        };
+
+        function fallToOffline() {
+            state.isOffline = true;
+            updateSyncIndicator('offline');
+            state.transactions = JSON.parse(localStorage.getItem('ft_v2_tx')) || [];
+            state.categories = JSON.parse(localStorage.getItem('ft_v2_cats')) || state.categories;
+            refreshUI();
+        }
+
+        startApp();
+        window.resetForm();
+    </script>
+</body>
+</html>
